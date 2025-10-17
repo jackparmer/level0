@@ -1,69 +1,66 @@
-# Bevy 3D Fog Scene with WASM
+# Level 0 - Bevy 3D WASM Scene
 
-This project creates a Bevy 0.17 3D scene with fog and compiles it to WebAssembly for browser display.
+A 3D scene built with Bevy Engine that compiles to WebAssembly (WASM) for web deployment.
 
 ## Features
 
-- 3D scene with multiple cubes and a ground plane
-- Animated fog with linear falloff
-- Rotating camera
-- Directional lighting with shadows
-- Ambient lighting
+- **3D Scene**: Interactive 3D environment with a controllable cube
+- **WASM Support**: Compiles to WebAssembly for browser deployment
+- **Collision Detection**: Invisible collision meshes for line-of-sight blocking
+- **Dynamic Objects**: Spawning spheres that chase the player
+- **Visual Effects**: Smoke particles, emissive materials, and dynamic lighting
+- **Camera Controls**: WASD movement with camera following
 
-## Current Status
+## Project Structure
 
-The project is set up with:
-- ✅ Bevy 0.17 with 3D scene and fog
-- ✅ WASM compilation configuration
-- ✅ HTML template for browser display
-- ❌ WASM compilation (blocked by getrandom dependency issue)
+```
+src/
+├── lib.rs          # Main WASM entry point
+├── main.rs         # Local development entry point
+├── simple_main.rs  # Simplified local version
+└── simple_wasm.rs  # Simplified WASM version
+```
 
-## The Issue
+## Building and Running
 
-The current blocker is that Bevy 0.17 depends on `getrandom` 0.3.3, which doesn't support `wasm32-unknown-unknown` by default. The `getrandom` crate requires the `wasm_js` configuration flag to be set, but this is proving difficult to configure properly.
-
-## Files Created
-
-- `Cargo.toml` - Project configuration with Bevy 0.17
-- `src/lib.rs` - Main application code with 3D scene and fog
-- `src/main.rs` - Alternative main.rs (not used in WASM build)
-- `index.html` - HTML template for browser display
-- `build.sh` - Build script using wasm-pack
-- `build_trunk.sh` - Alternative build script using trunk
-- `.cargo/config.toml` - Cargo configuration for WASM
-
-## Scene Description
-
-The 3D scene includes:
-- A central cube (2x2x2)
-- A ground plane (20x20)
-- Multiple smaller cubes arranged in a grid pattern
-- Directional light with shadows
-- Ambient lighting
-- Camera with animated fog settings
-- Rotating camera that orbits the scene
-
-## Fog Configuration
-
-The fog uses linear falloff with:
-- Color: Light blue-gray (0.7, 0.8, 0.9)
-- Start distance: 5.0 units
-- End distance: 20.0 units
-- Animated density that varies over time
-
-## Next Steps
-
-To resolve the WASM compilation issue, consider:
-1. Using an older version of Bevy that has better WASM support
-2. Using a different random number generator
-3. Manually patching the getrandom dependency
-4. Using a different approach like Bevy's web examples
-
-## Running Locally
-
-For now, you can run the project locally (not in WASM) with:
+### Local Development
 ```bash
 cargo run
 ```
 
-This will show the 3D scene with fog in a native window.
+### WASM Build
+```bash
+./build.sh
+```
+
+### Web Server
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000/index.html` in your browser.
+
+## Controls
+
+- **WASD**: Move the red cube
+- **Shift**: Run faster
+- **Arrow Keys**: Adjust camera angle
+
+## Technical Details
+
+- **Engine**: Bevy 0.17
+- **Target**: WebAssembly (wasm32-unknown-unknown)
+- **Build Tool**: wasm-pack
+- **Web Server**: Python HTTP server
+
+## Dependencies
+
+- `bevy = "0.17"` - Game engine
+- `wasm-bindgen` - WASM bindings
+- `getrandom` - Random number generation
+
+## Notes
+
+- The scene includes transparent collision meshes for accurate line-of-sight detection
+- Assets are not included in this repository due to size constraints
+- The project is optimized for web deployment with minimal dependencies
