@@ -1,0 +1,6 @@
+[build]
+target = "wasm32-unknown-unknown"
+release = true
+
+[serve]
+port = 8080
