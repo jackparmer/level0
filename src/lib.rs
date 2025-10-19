@@ -1,6 +1,11 @@
 use bevy::prelude::*;
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+use web_sys;
+#[cfg(target_arch = "wasm32")]
+use js_sys;
+
 // Simple pseudo-random function for WASM compatibility
 fn pseudo_random(seed: f32) -> f32 {
     let x = seed.sin() * 43758.5453;
@@ -14,7 +19,7 @@ pub fn main() {
         .add_plugins(DefaultPlugins)
         .insert_resource(ClearColor(Color::srgb(0.005, 0.005, 0.005))) // Much darker background
         .add_systems(Startup, setup)
-        .add_systems(Update, (move_cube, follow_camera, spawn_footsteps, update_footsteps, draw_wireframe, rotate_radar, spawn_spheres, chase_cube, draw_line_of_sight, despawn_spheres, update_smoke))
+        .add_systems(Update, (move_cube, follow_camera, spawn_footsteps, update_footsteps, draw_wireframe, rotate_radar, spawn_spheres, chase_cube, draw_line_of_sight, despawn_spheres, update_smoke, update_health))
         .run();
 }
 
@@ -55,6 +60,7 @@ fn setup(
         Visibility::default(),
         InheritedVisibility::default(),
         CubeController, // Add controller component
+        Health { current: 100.0, max: 100.0 }, // Add health component
     ));
 
     
@@ -443,6 +449,12 @@ fn setup(
 #[derive(Component)]
 struct CubeController;
 
+#[derive(Component)]
+struct Health {
+    current: f32,
+    max: f32,
+}
+
 
 
 #[derive(Component)]
@@ -698,8 +710,7 @@ fn rotate_radar(
 fn spawn_spheres(
     time: Res<Time>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     mut spawner_query: Query<&mut SphereSpawner>,
     sphere_query: Query<Entity, With<ChasingSphere>>,
 ) {
@@ -709,21 +720,18 @@ fn spawn_spheres(
             if sphere_query.iter().count() >= 10 {
                 continue; // Don't spawn more spheres
             }
-            // Spawn a new black sphere at a random location on the ground
+            // Spawn a new UGV at a random location on the ground
             let angle = pseudo_random(time.elapsed_secs() * 1000.0) * 2.0 * std::f32::consts::PI;
             let radius = pseudo_random(time.elapsed_secs() * 1001.0) * 50.0 + 30.0; // 30-80 units away
             let x = angle.cos() * radius;
             let z = angle.sin() * radius;
-            let y = 0.5; // Ground level (sphere radius is 0.5, so center at 0.5 units high)
+            let y = 0.0; // Ground level
             
+            println!("Spawning UGV at position: ({}, {}, {})", x, y, z);
             commands.spawn((
-                Mesh3d(meshes.add(Sphere::new(0.5))), // Small sphere
-                MeshMaterial3d(materials.add(StandardMaterial {
-                    base_color: Color::srgb(0.0, 0.0, 0.0), // Black
-                    emissive: Color::srgb(0.1, 0.1, 0.1).into(), // Slightly emissive
-                    ..default()
-                })),
-                Transform::from_xyz(x, y, z),
+                SceneRoot(asset_server.load("models/antagonists/ugv/ugv.gltf#Scene0")),
+                Transform::from_xyz(x, y, z)
+                    .with_scale(Vec3::splat(0.25)), // Make UGV 2x smaller (0.5 -> 0.25)
                 GlobalTransform::default(),
                 Visibility::default(),
                 InheritedVisibility::default(),
@@ -743,6 +751,12 @@ fn check_line_of_sight(
 ) -> bool {
     let direction = (to - from).normalize();
     let distance = from.distance(to);
+    
+    // For now, let's simplify and just check if there are any obstacles at all
+    // If there are no obstacles, always return true
+    if obstacle_query.iter().count() == 0 {
+        return true;
+    }
     
     // Sample points along the ray for collision detection
     let num_samples = (distance / 2.0) as usize + 1; // Sample every 2 units
@@ -780,6 +794,11 @@ fn chase_cube(
     obstacle_query: Query<(&Transform, &ObstacleBlocker), (Without<CubeController>, Without<ChasingSphere>)>,
 ) {
     if let Ok(cube_transform) = cube_query.single() {
+        let sphere_count = sphere_query.iter().count();
+        if sphere_count > 0 {
+            println!("Chase cube: {} UGV's found, cube at {:?}", sphere_count, cube_transform.translation);
+        }
+        
         for (mut sphere_transform, mut sphere) in sphere_query.iter_mut() {
             let cube_pos = cube_transform.translation;
             let sphere_pos = sphere_transform.translation;
@@ -788,8 +807,9 @@ fn chase_cube(
             
             // Check if within range
             if distance < 100.0 {
-                // Check line of sight using raycasting
-                let has_line_of_sight = check_line_of_sight(sphere_pos, cube_pos, &obstacle_query);
+                // Temporarily disable line of sight check to test basic chasing
+                let has_line_of_sight = true; // Always true for now
+                println!("UGV at {:?}, distance: {:.2}, line of sight: {}", sphere_pos, distance, has_line_of_sight);
                 
                 if has_line_of_sight {
                     // Chase the cube
@@ -801,6 +821,12 @@ fn chase_cube(
                         // Close enough, move directly to cube
                         sphere_transform.translation = cube_pos;
                     }
+                    
+                    // Rotate UGV to face the cube
+                    let look_direction = direction;
+                    let rotation = Quat::from_rotation_y(look_direction.x.atan2(look_direction.z));
+                    sphere_transform.rotation = rotation;
+                    
                     sphere.last_line_of_sight = true;
                 } else {
                     sphere.last_line_of_sight = false;
@@ -852,9 +878,9 @@ fn despawn_spheres(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     sphere_query: Query<(Entity, &Transform), With<ChasingSphere>>,
-    cube_query: Query<&Transform, (With<CubeController>, Without<ChasingSphere>)>,
+    mut cube_query: Query<(&Transform, &mut Health), (With<CubeController>, Without<ChasingSphere>)>,
 ) {
-    if let Ok(cube_transform) = cube_query.single() {
+    for (cube_transform, mut cube_health) in cube_query.iter_mut() {
         let cube_pos = cube_transform.translation;
         
         for (sphere_entity, sphere_transform) in sphere_query.iter() {
@@ -863,6 +889,9 @@ fn despawn_spheres(
             
             // If sphere is close enough to the cube (intersecting)
             if distance < 1.5 { // 1.5 units threshold for intersection
+                // Damage the cube
+                cube_health.current = (cube_health.current - 10.0).max(0.0);
+                
                 // Create smoke particles at the sphere's position
                 for i in 0..8 {
                     let angle = (i as f32) * 2.0 * std::f32::consts::PI / 8.0;
@@ -926,6 +955,29 @@ fn update_smoke(
             transform.scale = Vec3::splat(scale);
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn update_health(
+    health_query: Query<&Health, (With<CubeController>, Changed<Health>)>,
+) {
+    for health in health_query.iter() {
+        // Call JavaScript function to update the DOM health bar
+        if let Some(window) = web_sys::window() {
+            if let Ok(update_fn) = js_sys::Reflect::get(&window, &"updateHealth".into()) {
+                if let Ok(update_fn) = update_fn.dyn_into::<js_sys::Function>() {
+                    let _ = update_fn.call1(&window, &wasm_bindgen::JsValue::from_f64(health.current as f64));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn update_health(
+    _health_query: Query<&Health, (With<CubeController>, Changed<Health>)>,
+) {
+    // No-op for non-WASM targets
 }
 
 
