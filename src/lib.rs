@@ -100,7 +100,7 @@ fn setup(
     let building_rotation = pseudo_random(303.0) * 2.0 * std::f32::consts::PI;
     
     // Spawn the building GLB model
-    let building_entity = commands.spawn((
+    commands.spawn((
         SceneRoot(asset_server.load("models/building/industrialbuildingpart.gltf#Scene0")),
         Transform::from_scale(Vec3::splat(building_scale))
             .with_translation(Vec3::new(building_x, 0.0, building_z))
@@ -111,7 +111,7 @@ fn setup(
         ObstacleBlocker {
             half_size: Vec3::new(10.0, 7.5, 10.0), // Building collision box half-size
         },
-    )).id();
+    ));
     
     // Add invisible collision mesh for the building
     commands.spawn((
@@ -206,7 +206,7 @@ fn setup(
         let glacier_height = -4.0; // Same low height
         
         // Spawn the glacier GLB model
-        let glacier_entity = commands.spawn((
+        commands.spawn((
             SceneRoot(asset_server.load("models/glacier/Iceberg.gltf#Scene0")),
             Transform::from_scale(Vec3::splat(glacier_scale))
                 .with_translation(Vec3::new(glacier_x, glacier_height, glacier_z))
@@ -274,7 +274,7 @@ fn setup(
     let radar_rotation = pseudo_random(996.0) * 2.0 * std::f32::consts::PI;
     
     // Spawn the first radar GLB model
-    let radar_entity = commands.spawn((
+    commands.spawn((
         SceneRoot(asset_server.load("models/radar/Radar_HENSOLDT_ASR_NG.gltf#Scene0")),
         Transform::from_scale(Vec3::splat(radar_scale))
             .with_translation(Vec3::new(radar_x, 0.0, radar_z))
@@ -348,7 +348,7 @@ fn setup(
         let radar_rotation = pseudo_random(987.0 + i as f32) * 2.0 * std::f32::consts::PI;
         
         // Spawn the radar GLB model
-        let radar_entity = commands.spawn((
+        commands.spawn((
             SceneRoot(asset_server.load("models/radar/Radar_HENSOLDT_ASR_NG.gltf#Scene0")),
             Transform::from_scale(Vec3::splat(radar_scale))
                 .with_translation(Vec3::new(radar_x, 0.0, radar_z))
@@ -437,10 +437,12 @@ fn setup(
             timer: Timer::from_seconds(10.0, TimerMode::Repeating),
         },
     ));
+    
 }
 
 #[derive(Component)]
 struct CubeController;
+
 
 
 #[derive(Component)]
@@ -699,9 +701,14 @@ fn spawn_spheres(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawner_query: Query<&mut SphereSpawner>,
+    sphere_query: Query<Entity, With<ChasingSphere>>,
 ) {
     for mut spawner in spawner_query.iter_mut() {
         if spawner.timer.tick(time.delta()).just_finished() {
+            // Check if we already have 10 spheres
+            if sphere_query.iter().count() >= 10 {
+                continue; // Don't spawn more spheres
+            }
             // Spawn a new black sphere at a random location on the ground
             let angle = pseudo_random(time.elapsed_secs() * 1000.0) * 2.0 * std::f32::consts::PI;
             let radius = pseudo_random(time.elapsed_secs() * 1001.0) * 50.0 + 30.0; // 30-80 units away
@@ -920,6 +927,7 @@ fn update_smoke(
         }
     }
 }
+
 
 
 
